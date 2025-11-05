@@ -142,7 +142,7 @@ MonoBehaviour:
   minWallRunHeight: 1.5
   wallLayer:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 8
   wallJumpForce: 8
   wallJumpUpForce: 5
 --- !u!143 &2960546343713721506

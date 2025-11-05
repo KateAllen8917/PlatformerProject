@@ -19,7 +19,7 @@ public class zipline_mover : MonoBehaviour
     {
         end_trigger.isTrigger = false;
         yield return StartCoroutine(MovePlayer());
-        yield return new WaitForSeconds(5f);
+        yield return new WaitForSeconds(3f);
         end_trigger.isTrigger = true;
     }
     private IEnumerator MovePlayer()
