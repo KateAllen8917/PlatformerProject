@@ -56,6 +56,9 @@ public class player_movement : MonoBehaviour
     private bool wallLeft;
     private bool wallRight;
 
+    [Header("Block Interactions")]
+    public float pushStrenght = 1f;
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -234,13 +237,19 @@ public class player_movement : MonoBehaviour
             if (isWallRunning)
                 StopWallRun();
         }
-    }
-
-    // Optional Gizmos to visualize wall check rays
-    void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.blue;
-        Gizmos.DrawRay(transform.position, transform.right * wallCheckDistance);
-        Gizmos.DrawRay(transform.position, -transform.right * wallCheckDistance);
+        void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            if (hit.gameObject.CompareTag("Pushable"))
+            {
+                Rigidbody body = hit.collider.attachedRigidbody;
+                if (body != null && !body.isKinematic)
+                {
+                    if (hit.moveDirection.y < -0.3f)
+                        return;
+                    Vector3 pushDir = new Vector3(hit.moveDirection.x, 0, hit.moveDirection.z);
+                    body.velocity = pushDir * pushStrenght ; 
+                }
+            }
+        }
     }
 }
