@@ -69,7 +69,7 @@ public class player_movement : MonoBehaviour
 
     void Update()
     {
-        HandleWallRun(); // 👈 Must come first
+        HandleWallRun(); // must come before movement
         HandleCrouch();
         HandleMovement();
         HandleMouseLook();
@@ -78,6 +78,7 @@ public class player_movement : MonoBehaviour
         HandleCameraDip();
     }
 
+    // -------------------- MOVEMENT --------------------
     void HandleMovement()
     {
         isGrounded = controller.isGrounded;
@@ -87,17 +88,11 @@ public class player_movement : MonoBehaviour
         float speed = walkSpeed;
 
         if (isSliding)
-        {
             speed = slideSpeed;
-        }
         else if (Input.GetKey(KeyCode.C))
-        {
             speed = crouchSpeed;
-        }
         else if (Input.GetKey(KeyCode.LeftShift))
-        {
             speed = sprintSpeed;
-        }
 
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
@@ -105,8 +100,11 @@ public class player_movement : MonoBehaviour
         Vector3 move = transform.right * x + transform.forward * z;
         controller.Move(move * speed * Time.deltaTime);
 
+        // Apply gravity
         if (!isWallRunning)
             velocity.y += gravity * Time.deltaTime;
+        else
+            velocity.y = wallRunGravity;
 
         controller.Move(velocity * Time.deltaTime);
     }
@@ -176,12 +174,15 @@ public class player_movement : MonoBehaviour
         cameraTransform.localPosition = Vector3.Lerp(cameraTransform.localPosition, targetCameraLocalPos, Time.deltaTime * cameraDipSpeed);
     }
 
-    // ------------- WALL RUNNING METHODS -------------
-
+    // -------------------- WALL RUNNING --------------------
     void CheckForWall()
     {
         wallRight = Physics.Raycast(transform.position, transform.right, out rightWallHit, wallCheckDistance, wallLayer);
         wallLeft = Physics.Raycast(transform.position, -transform.right, out leftWallHit, wallCheckDistance, wallLayer);
+
+        // Debug rays
+        Debug.DrawRay(transform.position, transform.right * wallCheckDistance, wallRight ? Color.green : Color.red);
+        Debug.DrawRay(transform.position, -transform.right * wallCheckDistance, wallLeft ? Color.green : Color.red);
     }
 
     void StartWallRun()
@@ -198,58 +199,79 @@ public class player_movement : MonoBehaviour
     void HandleWallRun()
     {
         CheckForWall();
-
         bool isAboveGround = !Physics.Raycast(transform.position, Vector3.down, minWallRunHeight);
+        bool movingForward = Input.GetKey(KeyCode.W);
 
-        if ((wallLeft || wallRight) && Input.GetKey(KeyCode.W) && isAboveGround && !isExitingWall)
+        // --- CASE 1: eligible for wall run ---
+        if ((wallLeft || wallRight) && movingForward && isAboveGround && !isExitingWall)
         {
-            StartWallRun();
+            if (!isWallRunning)
+                StartWallRun();
 
             Vector3 wallNormal = wallRight ? rightWallHit.normal : leftWallHit.normal;
             Vector3 wallDirection = Vector3.Cross(wallNormal, Vector3.up);
 
-            if ((transform.forward - wallDirection).magnitude > (transform.forward + wallDirection).magnitude)
+            if (Vector3.Dot(wallDirection, transform.forward) < 0)
                 wallDirection = -wallDirection;
 
             controller.Move(wallDirection.normalized * wallRunSpeed * Time.deltaTime);
-
             velocity.y = wallRunGravity;
 
+            // --- Jump off wall ---
             if (Input.GetButtonDown("Jump"))
             {
-                Vector3 jumpDir = Vector3.up + wallNormal;
-                velocity = jumpDir.normalized * wallJumpUpForce;
+                Vector3 jumpDir = wallNormal * wallJumpForce + Vector3.up * wallJumpUpForce;
+                velocity = jumpDir;
                 isExitingWall = true;
                 exitWallTimer = exitWallTime;
                 StopWallRun();
             }
+
+            // --- Stop if player looks away ---
+            if (Vector3.Dot(transform.forward, -wallNormal) > 0.2f)
+            {
+                StopWallRun();
+                isExitingWall = true;
+                exitWallTimer = exitWallTime;
+            }
         }
+        // --- CASE 2: exiting wall ---
         else if (isExitingWall)
         {
             exitWallTimer -= Time.deltaTime;
             if (exitWallTimer <= 0f)
-            {
                 isExitingWall = false;
-            }
+
+            if (isWallRunning)
+                StopWallRun();
         }
+        // --- CASE 3: no wall or grounded ---
         else
         {
             if (isWallRunning)
                 StopWallRun();
         }
-        void OnControllerColliderHit(ControllerColliderHit hit)
+
+        // --- Always stop when grounded ---
+        if (isGrounded && isWallRunning)
+            StopWallRun();
+    }
+
+    // -------------------- PUSHABLE OBJECTS --------------------
+    void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        if (hit.gameObject.CompareTag("Pushable"))
         {
-            if (hit.gameObject.CompareTag("Pushable"))
+            Rigidbody body = hit.collider.attachedRigidbody;
+            if (body != null && !body.isKinematic)
             {
-                Rigidbody body = hit.collider.attachedRigidbody;
-                if (body != null && !body.isKinematic)
-                {
-                    if (hit.moveDirection.y < -0.3f)
-                        return;
-                    Vector3 pushDir = new Vector3(hit.moveDirection.x, 0, hit.moveDirection.z);
-                    body.velocity = pushDir * pushStrenght ; 
-                }
+                if (hit.moveDirection.y < -0.3f)
+                    return;
+
+                Vector3 pushDir = new Vector3(hit.moveDirection.x, 0, hit.moveDirection.z);
+                body.velocity = pushDir * pushStrenght;
             }
         }
     }
 }
+
